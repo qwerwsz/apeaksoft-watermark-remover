@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from PIL import Image
 import uvicorn
@@ -152,6 +153,15 @@ app = FastAPI(
     description="Apeaksoft Watermark Remover 接口逆向服务",
     version="1.0.0",
     docs_url="/swagger",
+)
+
+# 启用 CORS，允许本地前端和部署域访问
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
