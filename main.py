@@ -365,6 +365,7 @@ async def erase_image(
 
         # 返回简化的响应
         return ImageEraseResponse(
+            code = 200,
             token=token,
             message="已提交擦除请求，正在处理中..",
         )
