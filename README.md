@@ -8,22 +8,77 @@ FastAPI service that forwards image erase requests to Apeaksoft’s watermark re
 - Benefit limit checks (size/resolution) against the upstream benefit status API.
 - Request/response logging to `logs/app.log` and persistence of request metadata and image binaries to `data/api_calls.db`.
 
-## Prerequisites
-- Python 3.11+ recommended.
-- `pip` available in PATH.
+## Quick Start
 
-## Setup
+### Option 1: Docker (Recommended)
+
+Pull and run the pre-built image:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/qwerwsz/apeaksoft-watermark-remover:latest
+
+# Run the container
+docker run -d \
+  --name watermark-remover \
+  -p 8000:8000 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  ghcr.io/qwerwsz/apeaksoft-watermark-remover:latest
+
+# Or use docker-compose
+cat > docker-compose.yml <<EOF
+version: '3.8'
+services:
+  watermark-remover:
+    image: ghcr.io/qwerwsz/apeaksoft-watermark-remover:latest
+    container_name: watermark-remover
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+EOF
+
+docker-compose up -d
+```
+
+Access the API at: http://localhost:8000
+
+Swagger UI: http://localhost:8000/docs
+
+### Option 2: Build Docker Image Locally
+
+```bash
+# Build the image
+docker build -t watermark-remover .
+
+# Run the container
+docker run -d -p 8000:8000 -v $(pwd)/data:/app/data -v $(pwd)/logs:/app/logs watermark-remover
+```
+
+### Option 3: Run with Python
+
+Prerequisites:
+- Python 3.11+ recommended
+- `pip` available in PATH
+
+Setup:
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Run
+Run:
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-Swagger UI: http://127.0.0.1:8000/swagger
+
+Access the API at: http://127.0.0.1:8000
+
+Swagger UI: http://127.0.0.1:8000/docs
 
 ## API
 
@@ -76,7 +131,24 @@ Example upstream response:
 - `database.py` — SQLite helpers (aiosqlite) for call history/results.
 - `logs/`, `data/` — created automatically.
 
+## Docker Image Versions
+
+The Docker images are automatically built and published via GitHub Actions:
+
+- `latest` - Latest stable version from master branch
+- `v1.0.0` - Specific release version
+- `1.0`, `1` - Major/minor version tags
+- `master-sha-xxxxxx` - Specific commit SHA
+
 ## Development Tips
 - Run with `--reload` during local dev.
 - Adjust size limits or headers in `main.py` / `core.py` as needed.
 - Network calls require outbound access; failures will appear in `logs/app.log`.
+
+## CI/CD
+
+This project uses GitHub Actions for automated Docker image builds:
+- Triggers on push to master/main branches
+- Triggers on version tags (v*)
+- Multi-platform builds (linux/amd64, linux/arm64)
+- Automatic publishing to GitHub Container Registry (ghcr.io)
