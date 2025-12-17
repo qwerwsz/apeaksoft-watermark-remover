@@ -101,11 +101,13 @@ def _validate_against_benefits(request: "ImageEraseRequest", benefit_status: dic
             actual_mb = request.file_size_bytes / 1024 / 1024
             raise HTTPException(
                 status_code=400,
-                status=400,
-                message=(
-                    f"上传图片大小超过限制: {actual_mb:.2f}MB，"
-                    f"仅支持 {limit_mb:.2f}MB 及以下"
-                ),
+                detail={
+                    "status": 400,
+                    "message": (
+                        f"上传图片大小超过限制: {actual_mb:.2f}MB，"
+                        f"仅支持 {limit_mb:.2f}MB 及以下"
+                    ),
+                },
             )
 
     # 检查输入分辨率最大边
@@ -114,12 +116,14 @@ def _validate_against_benefits(request: "ImageEraseRequest", benefit_status: dic
         in_edge_threshold = _parse_int((benefits.get("in_edge") or {}).get("threshold"))
         if in_edge_threshold and in_edge_threshold > 0 and max_edge > in_edge_threshold:
             raise HTTPException(
-                status=400,
                 status_code=400,
-                message=(
-                    f"上传图片最大边超过限制: {max_edge}px，"
-                    f"仅支持 {in_edge_threshold}px 及以下"
-                ),
+                detail={
+                    "status": 400,
+                    "message": (
+                        f"上传图片最大边超过限制: {max_edge}px，"
+                        f"仅支持 {in_edge_threshold}px 及以下"
+                    ),
+                },
             )
 
 
@@ -142,9 +146,11 @@ def _validate_upload_file(file: UploadFile, max_size: int = MAX_FILE_SIZE) -> No
     """验证上传文件的类型和大小"""
     if not file.content_type or file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
-            status=400,
             status_code=400,
-            message=f"不支持的文件类型: {file.content_type}。仅支持: {', '.join(ALLOWED_IMAGE_TYPES)}"
+            detail={
+                "status": 400,
+                "message": f"不支持的文件类型: {file.content_type}。仅支持: {', '.join(ALLOWED_IMAGE_TYPES)}",
+            },
         )
 
     # 注意：FastAPI 的 UploadFile 需要读取后才能获取大小，这里只做类型检查
@@ -166,6 +172,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Return HTTP errors without nesting under `detail`."""
+    if isinstance(exc.detail, dict):
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "status": exc.status_code,
+            "message": exc.detail if exc.detail else "未知错误",
+        },
+    )
 
 
 @app.on_event("startup")
@@ -228,9 +248,14 @@ async def erase_image(
         # 验证文件大小
         if file_size_bytes > MAX_FILE_SIZE:
             raise HTTPException(
-                status=413,
                 status_code=413,
-                message=f"文件过大: {file_size_bytes / 1024 / 1024:.2f}MB，最大允许 {MAX_FILE_SIZE / 1024 / 1024:.0f}MB"
+                detail={
+                    "status": 413,
+                    "message": (
+                        f"文件过大: {file_size_bytes / 1024 / 1024:.2f}MB，最大允许 "
+                        f"{MAX_FILE_SIZE / 1024 / 1024:.0f}MB"
+                    ),
+                },
             )
 
         mask_bytes = await mask.read()
@@ -276,9 +301,11 @@ async def erase_image(
 
         if not upstream_resp:
             raise HTTPException(
-                status=502,
                 status_code=502,
-                message="远程服务上传失败"
+                detail={
+                    "status": 502,
+                    "message": "远程服务上传失败",
+                },
             )
 
         # 检查 upstream_resp 状态
@@ -286,9 +313,11 @@ async def erase_image(
         if upstream_status != "200":
             logger.error(f"[{request_id}] 上传失败: status={upstream_status}, resp={upstream_resp}")
             raise HTTPException(
-                status=502,
                 status_code=502,
-                message=f"远程服务返回错误: {upstream_resp.get('message', '未知错误')}"
+                detail={
+                    "status": 502,
+                    "message": f"远程服务返回错误: {upstream_resp.get('message', '未知错误')}",
+                },
             )
 
         logger.info(f"[{request_id}] 上传成功: {upstream_resp}")
@@ -303,9 +332,11 @@ async def erase_image(
         if not token:
             logger.error(f"[{request_id}] 无法从上传响应中提取 token. resp={upstream_resp}")
             raise HTTPException(
-                status=502,
                 status_code=502,
-                message="无法获取处理任务Token"
+                detail={
+                    "status": 502,
+                    "message": "无法获取处理任务Token",
+                },
             )
 
         logger.info(f"[{request_id}] 查询 WM 处理状态")
@@ -314,9 +345,11 @@ async def erase_image(
         if not wm_resp:
             logger.error(f"[{request_id}] WM 状态查询失败")
             raise HTTPException(
-                status=502,
                 status_code=502,
-                message="水印处理状态查询失败"
+                detail={
+                    "status": 502,
+                    "message": "水印处理状态查询失败",
+                },
             )
 
         # 检查 wm_resp 状态
@@ -325,8 +358,10 @@ async def erase_image(
             logger.error(f"[{request_id}] WM 处理失败: status={wm_status}, resp={wm_resp}")
             raise HTTPException(
                 status_code=502,
-                status=502,
-                message=f"图片擦除失败: {wm_resp.get('message', '未知错误')}"
+                detail={
+                    "status": 502,
+                    "message": f"图片擦除失败: {wm_resp.get('message', '未知错误')}",
+                },
             )
 
         logger.info(f"[{request_id}] WM 状态响应成功: {wm_resp}")
@@ -376,8 +411,10 @@ async def erase_image(
         logger.exception(f"[{request_id}] 图片擦除失败")
         raise HTTPException(
             status_code=500,
-            status=500,
-            message=f"内部服务错误: {str(e)}"
+            detail={
+                "status": 500,
+                "message": f"内部服务错误: {str(e)}",
+            },
         )
 
 
@@ -400,9 +437,11 @@ async def get_erase_status(
     if upstream_resp is None:
         logger.error(f"[{request_id}] 远程服务查询失败")
         raise HTTPException(
-            status=502,
             status_code=502,
-            message="远程服务查询失败"
+            detail={
+                "status": 502,
+                "message": "远程服务查询失败",
+            },
         )
 
     result_url = (
